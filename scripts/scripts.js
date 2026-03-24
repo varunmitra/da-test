@@ -11,11 +11,47 @@ import {
   loadSection,
   loadSections,
   loadCSS,
+  loadScript,
   sampleRUM,
   readBlockConfig,
   toClassName,
   toCamelCase,
 } from './aem.js';
+
+const DEFINED_AUDIENCES = {
+  mobile: () => window.innerWidth < 600,
+  desktop: () => window.innerWidth >= 600,
+  'new-visitor': () => !localStorage.getItem('returning-visitor'),
+  'returning-visitor': () => !!localStorage.getItem('returning-visitor'),
+};
+
+function getAllMetadata(prefix) {
+  return [...document.head.querySelectorAll(`meta[name^="${prefix}-"], meta[property^="${prefix}:"]`)]
+    .reduce((res, meta) => {
+      const name = meta.getAttribute('name') || meta.getAttribute('property');
+      const key = name.substring(prefix.length + 1);
+      res[key] = meta.getAttribute('content');
+      return res;
+    }, {});
+}
+
+function getExperimentationConfig() {
+  return {
+    audiences: DEFINED_AUDIENCES,
+  };
+}
+
+function getExperimentationContext() {
+  return {
+    getAllMetadata,
+    getMetadata,
+    loadCSS,
+    loadScript,
+    sampleRUM,
+    toCamelCase,
+    toClassName,
+  };
+}
 
 /**
  * Moves all the attributes from a given elmenet to another given element.
@@ -181,8 +217,19 @@ async function loadEager(doc) {
   const main = doc.querySelector('main');
   if (main) {
     decorateMain(main);
+    if (getMetadata('experiment')
+      || Object.keys(getAllMetadata('campaign')).length
+      || Object.keys(getAllMetadata('audience')).length) {
+      const { loadEager: runEager } = await import('../plugins/experimentation/src/index.js');
+      await runEager(document, getExperimentationConfig(), getExperimentationContext());
+      // Re-decorate main after plugin may have swapped in variant content
+      decorateMain(main);
+    }
     doc.body.classList.add('appear');
-    await loadSection(main.querySelector('.section'), waitForFirstImage);
+    const firstSection = main.querySelector('.section');
+    if (firstSection) {
+      await loadSection(firstSection, waitForFirstImage);
+    }
   }
 
   sampleRUM.enhance();
@@ -216,6 +263,13 @@ async function loadLazy(doc) {
 
   loadCSS(`${window.hlx.codeBasePath}/styles/lazy-styles.css`);
   loadFonts();
+
+  if (getMetadata('experiment')
+    || Object.keys(getAllMetadata('campaign')).length
+    || Object.keys(getAllMetadata('audience')).length) {
+    const { loadLazy: runLazy } = await import('../plugins/experimentation/src/index.js');
+    await runLazy(document, getExperimentationConfig(), getExperimentationContext());
+  }
 }
 
 /**
