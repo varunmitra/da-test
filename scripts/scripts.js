@@ -11,6 +11,7 @@ import {
   loadSection,
   loadSections,
   loadCSS,
+  loadScript,
   sampleRUM,
   readBlockConfig,
   toClassName,
@@ -42,11 +43,13 @@ function getExperimentationConfig() {
 
 function getExperimentationContext() {
   return {
-    getMetadata,
-    toClassName,
-    toCamelCase,
-    sampleRUM,
     getAllMetadata,
+    getMetadata,
+    loadCSS,
+    loadScript,
+    sampleRUM,
+    toCamelCase,
+    toClassName,
   };
 }
 
@@ -214,10 +217,17 @@ async function loadEager(doc) {
   const main = doc.querySelector('main');
   if (main) {
     decorateMain(main);
-    const { loadEager: loadExperimentationEager } = await import('../plugins/experimentation/src/index.js');
-    await loadExperimentationEager(document, getExperimentationConfig(), getExperimentationContext());
+    if (getMetadata('experiment')
+      || Object.keys(getAllMetadata('campaign')).length
+      || Object.keys(getAllMetadata('audience')).length) {
+      const { loadEager: runEager } = await import('../plugins/experimentation/src/index.js');
+      await runEager(document, getExperimentationConfig(), getExperimentationContext());
+    }
     doc.body.classList.add('appear');
-    await loadSection(main.querySelector('.section'), waitForFirstImage);
+    const firstSection = main.querySelector('.section');
+    if (firstSection) {
+      await loadSection(firstSection, waitForFirstImage);
+    }
   }
 
   sampleRUM.enhance();
@@ -252,8 +262,12 @@ async function loadLazy(doc) {
   loadCSS(`${window.hlx.codeBasePath}/styles/lazy-styles.css`);
   loadFonts();
 
-  const { loadLazy: loadExperimentationLazy } = await import('../plugins/experimentation/src/index.js');
-  await loadExperimentationLazy(document, getExperimentationConfig(), getExperimentationContext());
+  if (getMetadata('experiment')
+    || Object.keys(getAllMetadata('campaign')).length
+    || Object.keys(getAllMetadata('audience')).length) {
+    const { loadLazy: runLazy } = await import('../plugins/experimentation/src/index.js');
+    await runLazy(document, getExperimentationConfig(), getExperimentationContext());
+  }
 }
 
 /**
