@@ -222,6 +222,8 @@ async function loadEager(doc) {
       || Object.keys(getAllMetadata('audience')).length) {
       const { loadEager: runEager } = await import('../plugins/experimentation/src/index.js');
       await runEager(document, getExperimentationConfig(), getExperimentationContext());
+      // Re-decorate main after plugin may have swapped in variant content
+      decorateMain(main);
     }
     doc.body.classList.add('appear');
     const firstSection = main.querySelector('.section');
