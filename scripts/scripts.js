@@ -17,6 +17,39 @@ import {
   toCamelCase,
 } from './aem.js';
 
+const DEFINED_AUDIENCES = {
+  mobile: () => window.innerWidth < 600,
+  desktop: () => window.innerWidth >= 600,
+  'new-visitor': () => !localStorage.getItem('returning-visitor'),
+  'returning-visitor': () => !!localStorage.getItem('returning-visitor'),
+};
+
+function getAllMetadata(prefix) {
+  return [...document.head.querySelectorAll(`meta[name^="${prefix}-"], meta[property^="${prefix}:"]`)]
+    .reduce((res, meta) => {
+      const name = meta.getAttribute('name') || meta.getAttribute('property');
+      const key = name.substring(prefix.length + 1);
+      res[key] = meta.getAttribute('content');
+      return res;
+    }, {});
+}
+
+function getExperimentationConfig() {
+  return {
+    audiences: DEFINED_AUDIENCES,
+  };
+}
+
+function getExperimentationContext() {
+  return {
+    getMetadata,
+    toClassName,
+    toCamelCase,
+    sampleRUM,
+    getAllMetadata,
+  };
+}
+
 /**
  * Moves all the attributes from a given elmenet to another given element.
  * @param {Element} from the element to copy attributes from
@@ -181,6 +214,8 @@ async function loadEager(doc) {
   const main = doc.querySelector('main');
   if (main) {
     decorateMain(main);
+    const { loadEager: loadExperimentationEager } = await import('../plugins/experimentation/src/index.js');
+    await loadExperimentationEager(document, getExperimentationConfig(), getExperimentationContext());
     doc.body.classList.add('appear');
     await loadSection(main.querySelector('.section'), waitForFirstImage);
   }
@@ -216,6 +251,9 @@ async function loadLazy(doc) {
 
   loadCSS(`${window.hlx.codeBasePath}/styles/lazy-styles.css`);
   loadFonts();
+
+  const { loadLazy: loadExperimentationLazy } = await import('../plugins/experimentation/src/index.js');
+  await loadExperimentationLazy(document, getExperimentationConfig(), getExperimentationContext());
 }
 
 /**
